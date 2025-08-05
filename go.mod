@@ -1,4 +1,4 @@
-module github.com/Ahmedhossamdev/kvstore
+module github.com/Ahmedhossamdev/simple-kv
 
 go 1.22.5
 

@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Ahmedhossamdev/kvstore/server"
-	"github.com/Ahmedhossamdev/kvstore/store"
+	"github.com/Ahmedhossamdev/simple-kv/server"
+	"github.com/Ahmedhossamdev/simple-kv/store"
 )
 
 func main() {

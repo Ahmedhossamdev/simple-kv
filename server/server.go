@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Ahmedhossamdev/kvstore/peer"
-	"github.com/Ahmedhossamdev/kvstore/store"
+	"github.com/Ahmedhossamdev/simple-kv/peer"
+	"github.com/Ahmedhossamdev/simple-kv/store"
 	"github.com/google/uuid"
 )
 
