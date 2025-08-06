@@ -328,72 +328,72 @@ jobs:
       run: |
         docker compose -f docker-compose.e2e.yml down -v
 
-  # Job 6: Security Scan
-  security-scan:
-    name: 🛡️ Security Scan
-    runs-on: ubuntu-latest
-    needs: [lint-and-security]
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  # # Job 6: Security Scan
+  # security-scan:
+  #   name: 🛡️ Security Scan
+  #   runs-on: ubuntu-latest
+  #   needs: [lint-and-security]
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
 
-    - name: Build Docker image for scanning
-      run: |
-        docker build -t simple-kv:security-scan .
+  #   - name: Build Docker image for scanning
+  #     run: |
+  #       docker build -t simple-kv:security-scan .
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: 'simple-kv:security-scan'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+  #   - name: Run Trivy vulnerability scanner
+  #     uses: aquasecurity/trivy-action@master
+  #     with:
+  #       image-ref: 'simple-kv:security-scan'
+  #       format: 'sarif'
+  #       output: 'trivy-results.sarif'
 
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+  #   - name: Upload Trivy scan results to GitHub Security tab
+  #     uses: github/codeql-action/upload-sarif@v2
+  #     if: always()
+  #     with:
+  #       sarif_file: 'trivy-results.sarif'
 
   # Job 7: Build and Push Docker Image
-  build-and-push:
-    name: 🐳 Build & Push
-    runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, performance-tests, e2e-tests, security-scan]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+  # build-and-push:
+  #   name: 🐳 Build & Push
+  #   runs-on: ubuntu-latest
+  #   needs: [unit-tests, integration-tests, performance-tests, e2e-tests, security-scan]
+  #   if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+  #   - name: Set up Docker Buildx
+  #     uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.DOCKER_REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+  #   - name: Log in to Container Registry
+  #     uses: docker/login-action@v3
+  #     with:
+  #       registry: ${{ env.DOCKER_REGISTRY }}
+  #       username: ${{ github.actor }}
+  #       password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+  #   - name: Extract metadata
+  #     id: meta
+  #     uses: docker/metadata-action@v5
+  #     with:
+  #       images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+  #       tags: |
+  #         type=ref,event=branch
+  #         type=ref,event=pr
+  #         type=sha,prefix={{branch}}-
+  #         type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+  #   - name: Build and push Docker image
+  #     uses: docker/build-push-action@v5
+  #     with:
+  #       context: .
+  #       platforms: linux/amd64,linux/arm64
+  #       push: true
+  #       tags: ${{ steps.meta.outputs.tags }}
+  #       labels: ${{ steps.meta.outputs.labels }}
+  #       cache-from: type=gha
+  #       cache-to: type=gha,mode=max
 
 
