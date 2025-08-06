@@ -3,7 +3,7 @@
 .PHONY: help build up down logs status test clean rebuild dev
 .PHONY: test-unit test-integration test-performance test-e2e test-all
 .PHONY: test-coverage test-race test-bench lint format security
-.PHONY: docker-test docker-clean install-tools pre-commit
+.PHONY: docker-test docker-clean install-tools pre-commit test-ci
 
 # Colors for output
 GREEN=\033[0;32m
@@ -41,6 +41,7 @@ help:
 	@echo "  format        Format code"
 	@echo "  security      Run security scans"
 	@echo "  pre-commit    Run pre-commit hooks"
+	@echo "  test-ci       Run local CI/CD pipeline test"
 	@echo ""
 	@echo "$(GREEN)Development Commands:$(NC)"
 	@echo "  dev           Full development setup (rebuild + test)"
@@ -230,3 +231,8 @@ dev: rebuild test-unit
 	@echo "  $(YELLOW)make test-all$(NC)     - Run all tests"
 	@echo "  $(YELLOW)make test-e2e$(NC)     - Run E2E tests with cluster"
 	@echo "  $(YELLOW)make logs$(NC)         - View cluster logs"
+
+# Test CI/CD pipeline locally
+test-ci:
+	@echo "$(GREEN)🔄 Testing CI/CD pipeline locally...$(NC)"
+	@./test-ci-locally.sh
