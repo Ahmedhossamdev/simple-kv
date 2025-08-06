@@ -1,0 +1,59 @@
+# Test configuration for different environments
+
+test:
+  # Unit test configuration
+  unit:
+    timeout: 30s
+    race: true
+    coverage:
+      minimum: 70
+      output: coverage.out
+      html: coverage.html
+
+  # Integration test configuration
+  integration:
+    timeout: 5m
+    ports:
+      start: 9000
+      end: 9100
+
+  # Performance test configuration
+  performance:
+    timeout: 30m
+    concurrent_clients: 100
+    operations_per_client: 50
+    duration: 10s
+
+    load_test:
+      memory_keys: 10000
+      key_size: 100
+      value_size: 500
+
+    throughput_test:
+      workers: 10
+      duration: 5s
+
+    latency_test:
+      operations: 1000
+
+  # E2E test configuration
+  e2e:
+    timeout: 10m
+    cluster_size: 3
+    startup_wait: 20s
+    sync_wait: 35s
+
+# Docker test configuration
+docker:
+  test_image: simple-kv:test
+  network: simple-kv-test-network
+
+# CI/CD configuration
+ci:
+  go_versions: ["1.21", "1.22"]
+  platforms: ["linux/amd64", "linux/arm64"]
+
+  quality_gates:
+    coverage_threshold: 70
+    performance_regression: 10  # percent
+    security_issues: 0

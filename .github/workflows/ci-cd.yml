@@ -1,0 +1,355 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  GO_VERSION: '1.22'
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Code Quality and Security
+  lint-and-security:
+    name: 🔍 Lint & Security
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run go fmt
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files are not formatted:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Install staticcheck
+      run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+    - name: Run staticcheck
+      run: staticcheck ./...
+
+    - name: Install gosec
+      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
+    - name: Run gosec (security scanner)
+      run: gosec ./...
+
+  # Job 2: Unit Tests
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.21', '1.22']
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run unit tests
+      run: |
+        go test -v -race -coverprofile=coverage.out ./store/... ./server/...
+
+    - name: Check test coverage
+      run: |
+        go tool cover -func=coverage.out
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
+        echo "Total coverage: ${COVERAGE}%"
+        if (( $(echo "$COVERAGE < 70.0" | bc -l) )); then
+          echo "❌ Coverage is below 70%"
+          exit 1
+        else
+          echo "✅ Coverage is above 70%"
+        fi
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+
+  # Job 3: Integration Tests
+  integration-tests:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run integration tests
+      run: |
+        go test -v -tags=integration ./...
+
+    - name: Test Docker build
+      run: |
+        docker build -t simple-kv:test .
+
+  # Job 4: Performance Tests
+  performance-tests:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run performance tests
+      run: |
+        go test -v -run="^TestHighConcurrency|TestThroughput|TestLatency" -timeout=30m ./performance_test.go
+
+    - name: Run benchmarks
+      run: |
+        go test -bench=. -benchmem -count=3 ./store/... ./server/... > benchmark.txt
+        cat benchmark.txt
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: benchmark.txt
+
+  # Job 5: End-to-End Tests
+  e2e-tests:
+    name: 🎭 E2E Tests
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t simple-kv:e2e .
+
+    - name: Start cluster for E2E tests
+      run: |
+        # Create a test docker-compose file
+        cat > docker-compose.e2e.yml << EOF
+        version: '3.8'
+        services:
+          kv-node1:
+            image: simple-kv:e2e
+            ports:
+              - "8081:8080"
+            environment:
+              - KV_ADDR=:8080
+              - KV_PEERS=kv-node2:8080,kv-node3:8080
+            healthcheck:
+              test: ["CMD", "nc", "-z", "localhost", "8080"]
+              interval: 5s
+              timeout: 3s
+              retries: 3
+              start_period: 10s
+
+          kv-node2:
+            image: simple-kv:e2e
+            ports:
+              - "8082:8080"
+            environment:
+              - KV_ADDR=:8080
+              - KV_PEERS=kv-node1:8080,kv-node3:8080
+            healthcheck:
+              test: ["CMD", "nc", "-z", "localhost", "8080"]
+              interval: 5s
+              timeout: 3s
+              retries: 3
+              start_period: 10s
+
+          kv-node3:
+            image: simple-kv:e2e
+            ports:
+              - "8083:8080"
+            environment:
+              - KV_ADDR=:8080
+              - KV_PEERS=kv-node1:8080,kv-node2:8080
+            healthcheck:
+              test: ["CMD", "nc", "-z", "localhost", "8080"]
+              interval: 5s
+              timeout: 3s
+              retries: 3
+              start_period: 10s
+        EOF
+
+        docker-compose -f docker-compose.e2e.yml up -d
+        sleep 20
+
+    - name: Wait for cluster to be ready
+      run: |
+        for port in 8081 8082 8083; do
+          for i in {1..30}; do
+            if nc -z localhost $port; then
+              echo "✅ Node on port $port is ready"
+              break
+            fi
+            echo "⏳ Waiting for node on port $port... (attempt $i/30)"
+            sleep 2
+          done
+        done
+
+    - name: Run E2E tests
+      run: |
+        echo "🧪 Running E2E tests..."
+
+        # Test 1: Basic connectivity
+        echo "Test 1: Basic connectivity"
+        echo "SET e2e_key e2e_value" | nc localhost 8081
+
+        # Test 2: Data replication
+        echo "Test 2: Data replication (manual sync)"
+        echo "SYNC REQUEST" | nc localhost 8082
+
+        # Test 3: Node failure simulation
+        echo "Test 3: Node failure simulation"
+        docker-compose -f docker-compose.e2e.yml stop kv-node2
+        echo "SET failure_test failure_value" | nc localhost 8081
+        docker-compose -f docker-compose.e2e.yml start kv-node2
+        sleep 10
+
+        # Test 4: Automatic recovery check
+        echo "Test 4: Automatic recovery check"
+        sleep 35  # Wait for periodic sync
+        echo "GET failure_test" | nc localhost 8082
+
+        echo "✅ E2E tests completed"
+
+    - name: Show cluster logs
+      if: always()
+      run: |
+        echo "📋 Cluster logs:"
+        docker-compose -f docker-compose.e2e.yml logs
+
+    - name: Cleanup E2E environment
+      if: always()
+      run: |
+        docker-compose -f docker-compose.e2e.yml down -v
+
+  # Job 6: Security Scan
+  security-scan:
+    name: 🛡️ Security Scan
+    runs-on: ubuntu-latest
+    needs: [lint-and-security]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image for scanning
+      run: |
+        docker build -t simple-kv:security-scan .
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'simple-kv:security-scan'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Job 7: Build and Push Docker Image
+  build-and-push:
+    name: 🐳 Build & Push
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, performance-tests, e2e-tests, security-scan]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+
