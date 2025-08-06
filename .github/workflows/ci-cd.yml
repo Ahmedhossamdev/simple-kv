@@ -26,7 +26,7 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -95,7 +95,7 @@ jobs:
         go tool cover -func=coverage.out
         COVERAGE=$(go tool cover -func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
         echo "Total coverage: ${COVERAGE}%"
-        if (( $(echo "$COVERAGE < 30" | bc -l) )); then
+        if (( $(echo "$COVERAGE < 30.0" | bc -l) )); then
           echo "❌ Coverage is below 70%"
           exit 1
         else
@@ -161,7 +161,7 @@ jobs:
         cat benchmark.txt
 
     - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
         path: benchmark.txt
