@@ -73,7 +73,6 @@ func TestStoreConflictResolution(t *testing.T) {
 	evenEarlierTime := earlierTime - 1000000
 	s.Set("conflict-key", "very-old-value", evenEarlierTime, "msg-3")
 
-	value, exists = s.Get("conflict-key")
 	if value != "new-value" {
 		t.Errorf("Earlier timestamp should not overwrite, expected 'new-value', got '%s'", value)
 	}
