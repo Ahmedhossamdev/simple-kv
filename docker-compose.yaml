@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Node 1 - Acts as the primary node
+  kv-node1:
+    build: .
+    container_name: simple-kv-node1
+    ports:
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - PEERS=kv-node2:8080,kv-node3:8080
+    networks:
+      - kv-cluster
+    restart: unless-stopped
+    volumes:
+      - node1-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Node 2
+  kv-node2:
+    build: .
+    container_name: simple-kv-node2
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - PEERS=kv-node1:8080,kv-node3:8080
+    networks:
+      - kv-cluster
+    restart: unless-stopped
+    volumes:
+      - node2-data:/data
+    depends_on:
+      - kv-node1
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Node 3
+  kv-node3:
+    build: .
+    container_name: simple-kv-node3
+    ports:
+      - "8083:8080"
+    environment:
+      - PORT=8080
+      - PEERS=kv-node1:8080,kv-node2:8080
+    networks:
+      - kv-cluster
+    restart: unless-stopped
+    volumes:
+      - node3-data:/data
+    depends_on:
+      - kv-node1
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+
+networks:
+  kv-cluster:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  node1-data:
+    driver: local
+  node2-data:
+    driver: local
+  node3-data:
+    driver: local

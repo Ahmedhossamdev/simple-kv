@@ -1,0 +1,32 @@
+# Docker ignore file for simple-kv
+.git
+.gitignore
+README.md
+*.md
+.DS_Store
+Thumbs.db
+
+# Development files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Test files
+*_test.go
+
+# Documentation
+docs/
+
+# Docker files (we don't want to copy these into the container)
+docker-compose.yaml
+docker-compose.yml
+Dockerfile
+
+# CLI script (not needed in container)
+kv-cli.sh
+
+# Any local data directories
+data/
+volumes/
